@@ -1,0 +1,431 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Template for USENIX papers.
+%
+% History:
+%
+% - TEMPLATE for Usenix papers, specifically to meet requirements of
+%   USENIX '05. originally a template for producing IEEE-format
+%   articles using LaTeX. written by Matthew Ward, CS Department,
+%   Worcester Polytechnic Institute. adapted by David Beazley for his
+%   excellent SWIG paper in Proceedings, Tcl 96. turned into a
+%   smartass generic template by De Clarke, with thanks to both the
+%   above pioneers. Use at your own risk. Complaints to /dev/null.
+%   Make it two column with no page numbering, default is 10 point.
+%
+% - Munged by Fred Douglis <douglis@research.att.com> 10/97 to
+%   separate the .sty file from the LaTeX source template, so that
+%   people can more easily include the .sty file into an existing
+%   document. Also changed to more closely follow the style guidelines
+%   as represented by the Word sample file.
+%
+% - Note that since 2010, USENIX does not require endnotes. If you
+%   want foot of page notes, don't include the endnotes package in the
+%   usepackage command, below.
+% - This version uses the latex2e styles, not the very ancient 2.09
+%   stuff.
+%
+% - Updated July 2018: Text block size changed from 6.5" to 7"
+%
+% - Updated Dec 2018 for ATC'19:
+%
+%   * Revised text to pass HotCRP's auto-formatting check, with
+%     hotcrp.settings.submission_form.body_font_size=10pt, and
+%     hotcrp.settings.submission_form.line_height=12pt
+%
+%   * Switched from \endnote-s to \footnote-s to match Usenix's policy.
+%
+%   * \section* => \begin{abstract} ... \end{abstract}
+%
+%   * Make template self-contained in terms of bibtex entires, to allow
+%     this file to be compiled. (And changing refs style to 'plain'.)
+%
+%   * Make template self-contained in terms of figures, to
+%     allow this file to be compiled. 
+%
+%   * Added packages for hyperref, embedding fonts, and improving
+%     appearance.
+%   
+%   * Removed outdated text.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[letterpaper,twocolumn,10pt]{article}
+
+% to be able to draw some self-contained figs
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage[ascii]{inputenc}
+\usepackage{amssymb,amsfonts,textcomp}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{array}
+\usepackage{hhline}
+\usepackage[pdftex]{graphicx}
+\newcounter{Figure}
+\renewcommand\theFigure{\arabic{Figure}}
+
+% inlined bib file
+\usepackage{filecontents}
+
+%-------------------------------------------------------------------------------
+\begin{filecontents}{\jobname.bib}
+%-------------------------------------------------------------------------------
+
+@Book{arpachiDusseau18:osbook,
+  author =       {Arpaci-Dusseau, Remzi H. and Arpaci-Dusseau Andrea C.},
+  title =        {Operating Systems: Three Easy Pieces},
+  publisher =    {Arpaci-Dusseau Books, LLC},
+  year =         2015,
+  edition =      {1.00},
+  note =         {\url{http://pages.cs.wisc.edu/~remzi/OSTEP/}}
+}
+
+\end{filecontents}
+
+%-------------------------------------------------------------------------------
+\begin{document}
+%-------------------------------------------------------------------------------
+
+%don't want date printed
+\date{}
+
+% make title bold and 14 pt font (Latex default is non-bold, 16 pt)
+\title{\Large \bf MICROSOFT FIBRES IMPLEMENTATION IN LINUX\\}
+
+%for single author (just remove % characters)
+\author{
+{\rm Your N.\ Here}\\
+Your Institution
+\and
+{\rm Second Name}\\
+Second Institution
+% copy the following lines to add more authors
+% \and
+% {\rm Name}\\
+%Name Institution
+} % end author
+
+\maketitle
+
+%-------------------------------------------------------------------------------
+\begin{abstract}
+%-------------------------------------------------------------------------------
+A fibre is a technique for non-preemptive multiplexing. Fibres, in reality, are more akin to coroutines, a technique that dates back to the 1960s. A fibre is similar to a thread in that it consists of a register set and a stack, but it is not a thread. Unless it runs inside a thread, a fibre has no identity. When a fibre is suspended, it specifically selects and names (by specifying the target fibre's address) another fibre to which control is transferred. SwitchToFibre is the operation that does this. Until another SwitchToFibre is done, the fibre will continue to run in that thread.
+
+\end{abstract}
+
+
+%-------------------------------------------------------------------------------
+\section{Introduction}
+%-------------------------------------------------------------------------------
+Coroutines are a programming paradigm that provides non-preemptive timeshare multitasking that can be used to implement many patterns such as actuator models, state machines, and communication sequential processes. This concept has influenced many programming languages [200B?][200B?]such as Go and Clojure, especially for handling asynchronous I / O operations. Fibre is a non-preemptive multiplexing mechanism. 
+
+In fact, fibre is similar to the implementation of coroutines, a technology dating back to the 1960s. The fibre is similar to a thread because it consists of a register set and a stack, but it is not a thread. The fibre has no ID unless it runs in a thread. \ When a fibre is interrupted, control is transferred to another fibre by explicitly selecting and naming the destination fibre (by addressing it). The operation to do this is called SwitchToFibre. The fibre will continue to run in this thread until another SwitchToFibre runs.
+
+Unlike threads, fibres never end. When the fibre returns from the fibre function and exits the top level, the thread running the fibre implicitly runs an ExitThread to exit. This call to ExitThread means that the thread will not exit via the top-level function. That is, it does not perform the cleanup that needs to be done there. Therefore, think of the actual termination of a thread as a major programming mistake. This article proposes an implementation of the Loadable Kernel Module (LKM) based on the fibre implementation of Windows NT and ReactOS. Userspace implementations are often chosen because of their minimal overhead and ease of troubleshooting, but kernelspace implementations give a better understanding of how kernel subsystems work.
+
+The project is divided into two sections. 
+
+\begin{itemize}
+\item An LKM that implements the ability to provision fibres and manage their context, and an additional component that extends procfs to provide fibre information under / proc / tgid{\textgreater}.
+\item Userspace library to access the above features.
+\end{itemize}
+%-------------------------------------------------------------------------------
+\subsection{Fibres}
+%-------------------------------------------------------------------------------
+A fibre is a unit of execution that your application must manually configure. The thread that plans the fibre runs in the background. Each thread has the ability to plan multiple fibres. Fibres usually perform better than well-designed multithreaded programs. Fibre optics, on the other hand, makes it easier to port apps that aim to schedule your own threads.
+
+The fibre systematically inherits the identity of the threads that pass through it. For example, when a fibre accesses thread-local storage (TLS), it accesses the thread-local storage of the thread currently in use. If the fibre also calls the ExitThread method, the currently running thread will be terminated. Fibres, on the other hand, do not contain all the relevant state information that threads have. The stack, its subset of registers, and the fibre data provided during fibre construction are the only status information stored on the fibre. A saved register is a collection of registers that is normally retained from one function call to the next.
+
+Fibres are not planned in advance. The fibre is planned by switching from another fibre to this fibre. The system is still scheduled to run threads. If a thread running a fibre is expected, the thread's currently running fibre is also expected, but it is still selected. When the thread of the selected fibre is executed, it will be executed.
+
+%-------------------------------------------------------------------------------
+\subsection{Coroutines and Fibres}
+%-------------------------------------------------------------------------------
+Coroutines and fibres are both terms for the same thing. If there is a distinction, it is that coroutines are a language-level construct, a type of control flow, but fibres are a systems-level construct, understood as threads that don't operate in parallel. It's debatable which of the two notions takes precedence: fibres may be considered as a coroutine implementation or as a substrate on which coroutines can be implemented.
+
+%-------------------------------------------------------------------------------
+\subsection{Advantages and Drawbacks}
+%-------------------------------------------------------------------------------
+Thread safety is less of a concern with fibres than it is with proactively scheduled threads, because synchronization mechanisms like spinlocks and atomic operations aren't needed when developing fibreed programs because they are implicitly synchronized. Many libraries, however, inherently offer a fibre as a way of doing non-blocking I/O; as a result, some caution and documentation reading is recommended. Fibres can't use multiprocessor machines without employing preemptive threads, however a M:N threading architecture with no more preemptive threads than CPU cores can be more efficient than either pure fibres or pure preemptive threading.
+
+Fibres are used in certain server applications to soft block themselves so that their single-threaded parent programs can continue to run. Fibres are mostly employed in this system for I/O access that does not need CPU processing. This permits the main software to carry on with its tasks. Fibres hand over control to the single-threaded main program, and after the I/O operation is over, fibres resume their previous position.
+
+%-------------------------------------------------------------------------------
+\subsection{Why are fibres used?}
+%-------------------------------------------------------------------------------
+
+%-------------------------------------------------------------------------------
+\subsubsection{Speed}
+%-------------------------------------------------------------------------------
+Fibres are a light material. Switching from one fibre to another is a 32-instruction procedure with no kernel calls. This means that on a 2GHz computer, a switch may take as little as 8ns (worst case, if none of the data is in the cache, could be several tens of nanoseconds).
+
+If you're wondering where those figures came from, 32 instructions would take 16ns on a 2GHz computer if it weren't for the Pentium 4's {\textquotedbl}pipelined superscalar{\textquotedbl} architecture, which allows it to issue two integer instructions every clock cycle, yielding the 8ns value. Instruction fetch times are often hidden by instruction pipelining and prefetching. When nothing is in the cache, however, the performance is determined by the pattern of cache hits and replacements, and is thus restricted by the memory cycle speed, which is platform-dependent.
+
+This means that if you have a lot of little tasks to do, fibres may be a better option than threads, as threading requires kernel calls and scheduler invocation. Fibres operate inside the timeslice of the thread in which they are operating, therefore switching between several short-computation fibres causes no kernel blocking. In many circumstances, eliminating the need for synchronization also reduces the necessity for the scheduler to be used.
+
+%-------------------------------------------------------------------------------
+\subsubsection{Simplicity}
+%-------------------------------------------------------------------------------
+In many respects, the simplicity of fibres is similar to the simplicity of threading: instead of writing complicated interlaced code that attempts to perform multiple things at once, you write simple code that only does one thing and uses a variety of fibres to accomplish it. This helps you to focus on doing one thing well rather than trying to perform a bunch of things in a complicated and potentially fragile manner.
+
+%-------------------------------------------------------------------------------
+\subsubsection{Synchronization is no longer required.}
+%-------------------------------------------------------------------------------
+If two threads may access the same data in a preemptive multithreading environment, the data must be safeguarded by some type of synchronization. This may be as easy as utilizing one of the Interlocked... procedures, which lock at the memory-bus level, or it could need the usage of a CRITICAL SECTION or Mutex. The disadvantage of the latter two is that if access is denied, the kernel is invoked to deschedule the thread, which is then queued on the synchronization object for execution when the synchronization object is released. The CRITICAL SECTION is characterized by the fact that it does not need a kernel call if the synchronization object can be acquired (which is the most typical condition in most instances), but the Mutex must.
+
+Threads that rub together are said to be synchronized. Friction is the opposite of synchronization. Friction, like mechanical systems, creates heat and consumes energy. It's possible that avoiding it is the best option.
+
+Fibres can help one avoid this.
+
+SwitchToFibre is referred to be a {\textquotedbl}positive handoff.{\textquotedbl} A fibre cannot be preempted by any other fibre running in the thread until it shifts control. There is no requirement to synchronize the state after a fibre starts running, as long as the state it is updating is shared solely with other fibres that will execute within that thread. The fibre scheduling, which is expressly within the control of the programmer, includes synchronization.
+
+This isn't the ideal answer. A fibre can be scheduled to operate in many threads; if the shared state can now be accessed by fibres operating in different threads, the fibreness is no longer important; you have a multithread synchronization problem, and you must employ a CRITICAL SECTION or Mutex.
+
+Concurrency does not exist while fibres are present. When a fibre fails, such as during an I/O call, it is the thread that is executing the fibre that fails. Because the thread is blocked, no new fibres can be scheduled to run in that thread. Concurrency across fibres operating in the same thread is not possible (although you can get concurrency between fibres running in other threads). Fibres, on the other hand, are particularly beneficial for multiplexing basic compute-bound operations if you don't have blocking calls.
+
+%-------------------------------------------------------------------------------
+\subsection{Interface}
+The library exports entry points to kernel space code, which makes ioctl() calls to a specific miscdevice registered by the module at load time. Miscdevices, unlike {\textquotedbl}normal{\textquotedbl} character devices, are better suited to provide only an entry point to kernel capabilities rather than reserving a full range of minor numbers for genuine devices.
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img001.png} 
+
+Figure \stepcounter{Figure}{\theFigure}: module/fibres.c
+
+Following the module's loading, a new file named fibres emerges in /dev, and the.fibres folder appears in /proc. The file operations supported for such a device are open, release, and ioctl, which are invoked via the library's functions in response to system calls invocations on the file.
+
+
+\bigskip
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img002.png} 
+
+Figure \stepcounter{Figure}{\theFigure}: lib/fibres.c
+
+The given library contains a function Object() \{ [native code] \} method that opens the file, creating one file descriptor2 for communication with the module. All threads belonging to the process are permitted to communicate and execute fibres of the process since a file descriptor represents a pool of fibres. Furthermore, the code may simply be expanded to handle multiple openings of the same file, allowing alternate scheduling methods, such as allocating different pools to different threads, to be implemented.
+
+To prevent unintentional sharing of the fibres pool from parent to child after a fork(), an atfork function is registered to execute on the child after a fork, which closes the parent descriptor and reopens the file.
+
+Finally, the methods to convert a thread to fibre, create a new fibre, yield from one fibre to another, and allocate and manage fixed size memory are implemented in the library, based on ioctl calls on the \_\_fibres file file descriptor (Fibre Local Storage).
+
+
+\bigskip
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img003.png} 
+
+Figure \stepcounter{Figure}{\theFigure}: include/lib/fibres.h
+
+All of these methods prepare data structures for passing to their respective kernel space implementations and call the ioctl system call wrapper. Because the Linux system call dispatcher does not store the callee-save register when switching from one fibre to another, the code saves it. This is required in order to appropriately preserve and restore the execution context of a fibre; otherwise, the state of such registers would be unavailable when the system call is made in kernel space.
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img004.png} 
+
+Figure \stepcounter{Figure}{\theFigure}: lib/fibres.c
+
+long fib\_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
+
+\{
+
+\ \ long res = 0;
+
+\ \ if (cmd == IOCTL\_SWITCH\_FIB) \{
+
+\ \ \ \ asm volatile ({\textquotedbl}push \%\%rbx {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}push \%\%rbp {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}push \%\%r12 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}push \%\%r13 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}push \%\%r14 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}push \%\%r15 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}syscall {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}pop \%\%r15 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}pop \%\%r14 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}pop \%\%r13 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}pop \%\%r12 {\textbackslash}n{\textbackslash}t{\textquotedbl}
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}pop \%\%rbp {\textbackslash}n{\textbackslash}t{\textquotedbl} {\textquotedbl}pop \%\%rbx {\textbackslash}n{\textbackslash}t{\textquotedbl}:{\textquotedbl}=a{\textquotedbl} (res)
+
+\ \ \ \ \ \  \ \ \ \ \ :{\textquotedbl}0{\textquotedbl}(SYS\_ioctl), {\textquotedbl}D{\textquotedbl}(fd), {\textquotedbl}S{\textquotedbl}(cmd), {\textquotedbl}d{\textquotedbl}(arg):
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}memory{\textquotedbl});
+
+\ \ \} else \{
+
+\ \ \ \ asm volatile ({\textquotedbl}syscall {\textbackslash}n{\textbackslash}t{\textquotedbl}:{\textquotedbl}=a{\textquotedbl} (res)
+
+\ \ \ \ \ \  \ \ \ \ \ :{\textquotedbl}0{\textquotedbl}(SYS\_ioctl), {\textquotedbl}D{\textquotedbl}(fd), {\textquotedbl}S{\textquotedbl}(cmd), {\textquotedbl}d{\textquotedbl}(arg):
+
+\ \ \ \ \ \  \ \ \ \ \ {\textquotedbl}memory{\textquotedbl});
+
+
+\bigskip
+
+\ \ \}
+
+
+\bigskip
+
+\ \ return res;
+
+%-------------------------------------------------------------------------------
+\subsection{Module}
+%-------------------------------------------------------------------------------
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img005.png} 
+
+Figure \stepcounter{Figure}{\theFigure}: include/module/common.h
+
+When the library's constructor is called, an open file operation is conducted, which creates a struct fibres data that stores information about each process, such as:
+
+\begin{itemize}
+\item Fibres pool: an idr data structure that keeps track of the process' fibres. Internally, it employs a radix tree to facilitate the assignment of an id to fibres and retrieval of those fibres using the same id.
+\item Base: the directory entry for /proc/.fibres/tgid{\textgreater}, which contains one file for each fibre generated by the process. A symlink (fibres) to such a directory is added under /proc/tgid{\textgreater}, as discussed later.
+\item Fls: an array that keeps track of the fibres' allocation units.
+\item Bitmap: bitmap to control the aforementioned units' allocation and deallocation.
+\end{itemize}
+The struct is subsequently put in the file descriptor's private data field, which is a free field that device drivers can utilise to get it later using ioctl.
+
+These data structures are eventually destroyed during the file release procedure, which is triggered when the kernel frees the struct file associated with the file, i.e. on file closing or process exit/fault.
+
+The fibres' pool maintains the following types of structures:
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img006.png} 
+
+
+\bigskip
+
+\begin{itemize}
+\item On the first schedule, the entry point is the address of the first instruction that a fibre will execute.
+\end{itemize}
+
+\bigskip
+
+\begin{itemize}
+\item The exec context and fpuregs fields are used to retain all the registers content to keep the status of a fibre for context switching up to date.
+\end{itemize}
+
+\bigskip
+
+\begin{itemize}
+\item The status field is used to prevent a fibre from being utilised by two threads at the same time.
+\end{itemize}
+
+\bigskip
+
+\begin{itemize}
+\item The additional fields are used to store fibre statistics, which may be found in the file /proc/tgid{\textgreater}/fibres/fibre id{\textgreater}.
+\end{itemize}
+When you use the ioctl file operation, it sends the user space request to the appropriate kernel space function.
+
+
+
+%-------------------------------------------------------------------------------
+\subsection{Fibre Creation}
+%-------------------------------------------------------------------------------
+In the instance of a create fibre or to fibre call, a fibre data structure is produced. The latter is simply needed to inform the module that some threads can move to different fibres and that execution can restart at that thread.
+
+In a nutshell, the following measures were taken:
+
+{\textbullet} Allocation of a fibre struct struct, field initialization, and placement into fibres pool protected by rcu.
+
+The following activities are conducted in the case of create fibre to set the proper instruction pointer, stack pointer, and argument that are provided by userspace.
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img007.png} 
+
+The userspace library allocates the stack as follows:
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img008.png} 
+
+{\textbullet} When you add a fibre to fibres pool, a file called /proc/.fibres/tgid{\textgreater} is generated with the name of the fibre's id. A reference to the related struct fibre struct is saved in the field data of proc dir entry corresponding to /proc/.fibres/tgid{\textgreater}/fibre id{\textgreater} to conveniently obtain and show its statistics to the user.
+
+{\textbullet} Because it is necessary to know which fibre is executing on a particular thread, the reference to the struct fibre struct is kept at the bottom of the kernel stack, just above the struct thread info.
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img009.png} 
+
+The above macro functions as a per-thread kernel variable. As a result, to fibre sets current fibre to the following value:
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img010.png} 
+
+%-------------------------------------------------------------------------------
+\subsection{Switching between fibres }
+%-------------------------------------------------------------------------------
+ \includegraphics[width=3.0453in]{Report-img/Report-img011.png} 
+
+First, it's determined if the fibre has previously passed an atomic test-and-set on the state of the fibre, in which case the switch will simply fail. If the caller has not executed to fibre before, the switch will likewise fail. This is assured by verifying if current fibre is zero, which is safe only if the kernel allocates a zeroed stack to a thread and there hasn't been a stack overflow.
+
+The switch is then made using the struct pt regs, which is located at the top of the kernel stack and was previously pushed by the Linux system call dispatcher. When the dispatcher restores the userspace context, by modifying its fields and setting them to the values of the fibre we wish to switch to, the execution will proceed to the freshly established context.
+
+Finally, using the kernel's routines, the fpu registers are modified, the previously running fibre is released, and the current fibre is appropriately set.
+
+%-------------------------------------------------------------------------------
+\subsection{Local Fibre Storage}
+%-------------------------------------------------------------------------------
+Fibres are allocated using a basic allocator. A set number of entries can be allotted in fls, which are controlled by a bitmap that keeps one bit for each item indicating whether it's free (0) or occupied (1). (1).
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img012.png} 
+
+%-------------------------------------------------------------------------------
+\subsection{Extension for procfs}
+%-------------------------------------------------------------------------------
+At module load, a.fibres directory is established under /proc, and a directory for each thread group id that accesses the /dev/fibres file is generated under /proc/.fibres, as we discussed in the previous sections. One file is added to each directory for each fibre instantiation of the group.
+
+To make such information more proc-oriented, a symbolic link named fibres is added to /proc/tgid{\textgreater}, leading to the matching /proc/.fibres/tgid{\textgreater} directory.
+
+Because the entries in /proc/tgid{\textgreater} are statically defined at compile time, there is no way to add such a link through a module other than hooking the functions that are called when listing/moving a directory, namely proc tgid base readdir and proc tgid base lookup, which are respectively stored inside the iter shared field of proc tgid base operations and the lookup field
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img013.png} 
+
+The hooked readdir first runs the original function to fill the result with the right directory entries, and then creates a new directory entry of type link in the same way as the original function. The first three symbols in hooked syms names, as well as further re-definitions of not exported structs used and function pointers types, are required to do this.
+
+Similar techniques are used for lookup, however if the lookup is for the fibres directory, the original function is not called.
+
+
+%-------------------------------------------------------------------------------
+\section{Performance}
+%-------------------------------------------------------------------------------
+ \includegraphics[width=3.0453in]{Report-img/Report-img014.png} 
+
+Perf's FlameGraph reveals that the fls get function spends a significant amount of time in the simulation. The graph is partially broken since the starting frame-pointers for the stacks of the produced fibres yielding the [unknown] tag are not properly set.
+
+Instead, as illustrated in the graph with the block on top of main, the thread leader builds the fibres and then invokes the main loop.
+
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img015.png} 
+
+ \includegraphics[width=3.0453in]{Report-img/Report-img016.png} 
+
+The module-based version, as predicted, provides no performance improvements over the sigaltstack-based implementation. This is because calls to the given apis necessitate a mode switch, resulting in a twofold cost when compared to the sigaltstack implementation, because on a switch, the registers are first saved on stack by the Linux system call dispatcher and then copied on the fibre struct by the module. The fls get calls, which also need a mode switch, are the same.
+
+%-------------------------------------------------------------------------------
+\section{Conclusions}
+%-------------------------------------------------------------------------------
+Overall, the module performs admirably and interacts seamlessly with the kernel. A significant amount of effort was spent on the project's design decisions, seeking to identify the correct data structures to meet the project's requirements. Asynchronous I/O, multiple fibre pools per process, and channels to communicate across fibres may all be added to the library and module.
+
+%-------------------------------------------------------------------------------
+\section{References}
+%-------------------------------------------------------------------------------
+A Fibre Class. (2006). Flounder. http://www.flounder.com/fibres.htm
+
+CreateFibre. (2006). MSDN. http://msdn.microsoft.com/en-us/library/ms682402(VS.85).aspx
+
+Fibres. (2021).MSDN Library. http://msdn2.microsoft.com/en-us/library/ms682661.aspx
+
+Wikipedia contributors. (2021, March 19). Fibre (computer science). Wikipedia. https://en.wikipedia.org/wiki/Fibre (computer\_science)
+\end{document}
+
+\end{document}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%  LocalWords:  endnotes includegraphics fread ptr nobj noindent
+%%  LocalWords:  pdflatex acks
